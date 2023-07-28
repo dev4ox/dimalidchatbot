@@ -4,8 +4,10 @@ import datetime
 import time
 from telebot import types
 
-bot = telebot.TeleBot('6360450978:AAGN2oMWGXqhpyZ89Px4huPbtmxklyaSKVM')
-channel_check = '-1001979683693'
+import key
+
+bot = telebot.TeleBot(key.tgtoken)
+channel_check = key.channel_check
 
 # Приветственное сообщение
 welcome_mes = '<b>Привет будущий миллионер</b> 👋\n' \
@@ -32,7 +34,7 @@ bonus_mes = '<b>Поздравляю!</b> Ты уже на шаг ближе к 
 
 # Покупка через ЮКасса
 def buy_url(user_id):
-    url = 'https://yookassa.ru'
+    url = 't.me/gurutda'
     return url
 
 
