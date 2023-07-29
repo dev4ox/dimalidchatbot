@@ -7,6 +7,7 @@ import key
 
 bot = telebot.TeleBot(key.tgtoken)
 
+
 # Приветственное сообщение
 welcome_mes = '<b>Привет будущий миллионер</b> 👋\n' \
                'Я покажу тебе, как сделать бизнес с нуля.\n' \
@@ -16,6 +17,7 @@ welcome_mes = '<b>Привет будущий миллионер</b> 👋\n' \
                '1. <i>Подписывайся на канал</i>\n' \
                '2. <i>Делай активность</i>\n' \
                '3. <i>Получай вознаграждение</i>'
+
 # Бонусное сообщение
 bonus_mes = '<b>Поздравляю!</b> Ты уже на шаг ближе к своей цели!\n\n' \
                 'У меня есть для тебя еще одна крутая новость🔥\n\n' \
@@ -30,12 +32,11 @@ bonus_mes = '<b>Поздравляю!</b> Ты уже на шаг ближе к 
                 '<i>P.s.s. этот канал не будет удаляться и останется у тебя как полный пошаговый план</i>\n\n' \
                 'Вот кнопка на оплату, скорее оплачивай, время уже идет 👇'
 
+
 # Покупка через ЮКасса
 def buy_sub(user_id):
     url = 't.me/gurutda'
     return url
-
-
 
 
 # Функция для добавления пользователя в базу данных или обновления статуса подписки
@@ -74,6 +75,7 @@ def add_or_update_user(user_id, username, first_name, last_name, subpub, subpriv
     finally:
         conn.close()
 
+
 # Проверка подписки
 def check_pubsub(user_id, check_channel):
     try:
@@ -86,25 +88,40 @@ def check_pubsub(user_id, check_channel):
         pass
     return False
 
+
+def user_give_bonus(message):
+    user_id = message.chat.id
+    subpub_button = types.InlineKeyboardMarkup(row_width=1)
+    subpub_button.add(types.InlineKeyboardButton(text='Подписаться', url='https://t.me/dimonbataysk'))
+    buy_button = types.InlineKeyboardMarkup(row_width=1)
+    buy_button.add(types.InlineKeyboardButton(text='💎 Купить доступ', callback_data='user_buy_sub'))
+    if check_pubsub(user_id, key.id_channel_public) == False:
+        bot.send_message(user_id, 'Сначала подпишись на канал', reply_markup=subpub_button)
+    # Проверка подписки
+    while True:
+        user_is_subscribed = check_pubsub(user_id, key.id_channel_public)
+        if user_is_subscribed == True:
+            bot.send_message(user_id, bonus_mes, parse_mode='html', reply_markup=buy_button)
+            break
+        time.sleep(5)
+
+
+
 def admin_add_user(message):
-    bot.send_message()
+    pass
+
 
 #Обработка команды start
 def command_start(message, user_id):
-    bot.send_message(user_id, welcome_mes, parse_mode="html", reply_to_message_id=bot.send_photo(user_id, open('welcome.jpg', 'rb')).message_id)
-    # Добавление пользователя
-    add_or_update_user(user_id, message.from_user.username, message.from_user.first_name, message.from_user.last_name, False, False, 0)
-    # Проверка подписки
-    user_is_subscribed = check_pubsub(user_id, key.channel_public)
-    if user_is_subscribed == False:
-        bot.send_message(user_id, '<b>Твой ход. Действуй!</b> 💪', parse_mode='html')
-    while not user_is_subscribed:
-        user_is_subscribed = check_pubsub(user_id, key.channel_public)
-        time.sleep(5)
-    # Если пользователь подписан
-    buy_button = types.InlineKeyboardMarkup(row_width=1)
-    buy_button.add(types.InlineKeyboardButton(text='💎 Купить доступ', callback_data='user_buy_sub'))
-    bot.send_message(user_id, bonus_mes, parse_mode='html', reply_markup=buy_button)
+    # Запрос к БД с проверкой/добавления пользователя
+    add_or_update_user(user_id, message.from_user.username, message.from_user.first_name, message.from_user.last_name,
+                       False, False, 0)
+    # Отправка приветственного сообщения
+    bonus_button = types.InlineKeyboardMarkup(row_width=1)
+    bonus_button.add(types.InlineKeyboardButton(text='💎 Забрать бонус 💎', callback_data='user_give_bonus'))
+    with open('welcome.jpeg', 'rb') as photo:
+        bot.send_photo(chat_id=user_id, photo=photo, parse_mode='html', caption=welcome_mes, reply_markup=bonus_button)
+
 
 # Обработка команды admin
 def command_admin(message, user_id):
@@ -133,6 +150,10 @@ def start_bot():
             pass
         if call.data == 'admin_add_user':
             admin_add_user(call.message)
+        if call.data == 'user_give_bonus':
+            user_give_bonus(call.message)
+
+
 
     bot.polling(none_stop=True)
 start_bot()
