@@ -3,16 +3,14 @@ import sqlite3
 import datetime
 import time
 from telebot import types
-
 import key
 
 bot = telebot.TeleBot(key.tgtoken)
-channel_check = key.channel_check
 
 # Приветственное сообщение
 welcome_mes = '<b>Привет будущий миллионер</b> 👋\n' \
                'Я покажу тебе, как сделать бизнес с нуля.\n' \
-               'Самым <a href="https://t.me/dimonbataysk/103"><u>активным</u></a> я плачу деньги!\n' \
+               'Самым активным я плачу деньги!\n' \
                'Присоединяйся и стань частью истории!\n\n' \
                'Твои три шага к успеху:\n' \
                '1. <i>Подписывайся на канал</i>\n' \
@@ -33,7 +31,7 @@ bonus_mes = '<b>Поздравляю!</b> Ты уже на шаг ближе к 
                 'Вот кнопка на оплату, скорее оплачивай, время уже идет 👇'
 
 # Покупка через ЮКасса
-def buy_url(user_id):
+def buy_sub(user_id):
     url = 't.me/gurutda'
     return url
 
@@ -41,84 +39,100 @@ def buy_url(user_id):
 
 
 # Функция для добавления пользователя в базу данных или обновления статуса подписки
-def add_or_update_user(user_id, first_name, last_name, phone_number, subpublic_status, subprivat_status):
-    conn = sqlite3.connect('users.db')
-    cursor = conn.cursor()
-    #Проверка, есть ли такая БД
-    cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY,
-                first_name TEXT,
-                last_name TEXT,
-                phone_number TEXT,
-                registration_date TEXT,
-                subpublic_status BOOLEAN,
-                subprivat_status BOOLEAN
-            )
-        ''')
-    # Проверяем, существует ли пользователь с таким id в базе данных
-    cursor.execute("SELECT id FROM users WHERE id=?", (user_id,))
-    existing_user = cursor.fetchone()
+def add_or_update_user(user_id, username, first_name, last_name, subpub, subpriv, buy_sub):
+    try:
+        conn = sqlite3.connect('users.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY,
+                    username TEXT,
+                    first_name TEXT,
+                    last_name TEXT,
+                    reg_date TEXT,
+                    subpub BOOLEAN,
+                    subpriv BOOLEAN,
+                    buy_sub INTEGER
+                )
+            ''')
+        # Проверяем, существует ли пользователь с таким id в базе данных
+        cursor.execute("SELECT id FROM users WHERE id=?", (user_id,))
+        existing_user = cursor.fetchone()
+        # Если пользователь уже существует, обновляем статус подписки
+        if existing_user:
+            cursor.execute("UPDATE users SET subpub=? WHERE id=?", (subpub, user_id))
+        else:
+            # Получаем текущую дату и время
+            current_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    # Если пользователь уже существует, обновляем статус подписки
-    if existing_user:
-        cursor.execute("UPDATE users SET subpublic_status=? WHERE id=?", (subpublic_status, user_id))
-    else:
-        # Получаем текущую дату и время
-        current_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-        # Добавляем пользователя в базу данных со статусом подписки
-        cursor.execute('INSERT INTO users (id, first_name, last_name, phone_number, registration_date, subpublic_status, subprivat_status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                       (user_id, first_name, last_name, phone_number, current_date, subpublic_status, subprivat_status))
-
-    conn.commit()
-    conn.close()
+            # Добавляем пользователя в базу данных со статусом подписки
+            cursor.execute('INSERT INTO users (id, username, first_name, last_name, reg_date, subpub, subpriv, buy_sub) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                           (user_id, username, first_name, last_name, current_date, subpub, subpriv, buy_sub))
+        conn.commit()
+    except Exception as e:
+        pass
+    finally:
+        conn.close()
 
 # Проверка подписки
-def check_subscription(chat_id):
+def check_pubsub(user_id, check_channel):
     try:
-        chat_member = bot.get_chat_member(channel_check, chat_id)
-        if chat_member.status == "member":
+        chat_member = bot.get_chat_member(user_id, check_channel)
+        if chat_member.status == 'member' or chat_member.status == 'administrator':
             # Обновляем статус подписки на True в базе данных
-            add_or_update_user(chat_id, '', '', '', True, '')
+            add_or_update_user(user_id, '', '', '', True, '', '')
             return True
     except telebot.apihelper.ApiException:
-        # Обработка исключения, если пользователь не найден в канале
         pass
     return False
 
+def admin_add_user(message):
+    bot.send_message()
+
+#Обработка команды start
+def command_start(message, user_id):
+    bot.send_message(user_id, welcome_mes, parse_mode="html", reply_to_message_id=bot.send_photo(user_id, open('welcome.jpg', 'rb')).message_id)
+    # Добавление пользователя
+    add_or_update_user(user_id, message.from_user.username, message.from_user.first_name, message.from_user.last_name, False, False, 0)
+    # Проверка подписки
+    user_is_subscribed = check_pubsub(user_id, key.channel_public)
+    if user_is_subscribed == False:
+        bot.send_message(user_id, '<b>Твой ход. Действуй!</b> 💪', parse_mode='html')
+    while not user_is_subscribed:
+        user_is_subscribed = check_pubsub(user_id, key.channel_public)
+        time.sleep(5)
+    # Если пользователь подписан
+    buy_button = types.InlineKeyboardMarkup(row_width=1)
+    buy_button.add(types.InlineKeyboardButton(text='💎 Купить доступ', callback_data='user_buy_sub'))
+    bot.send_message(user_id, bonus_mes, parse_mode='html', reply_markup=buy_button)
+
+# Обработка команды admin
+def command_admin(message, user_id):
+    admin_button = types.InlineKeyboardMarkup(row_width=2)
+    admin_button.add(
+        types.InlineKeyboardButton(text='Пользователи', callback_data='admin_view_user'),
+        types.InlineKeyboardButton(text='Добавить в БД', callback_data='admin_add_user')
+    )
+    bot.send_message(user_id, 'Меню админа', reply_markup=admin_button)
+
+
 def start_bot():
-    @bot.message_handler(commands=['start'])
-    def start(message):
+    @bot.message_handler(commands=['start', 'admin'])
+    def welcome(message):
         user_id = message.chat.id
-        first_name = message.from_user.first_name
-        last_name = message.from_user.last_name
-        try:
-            phone_number = message.from_user.phone_number  # Допустим, у телеграмм-бота есть такая возможность
-        except:
-            phone_number = 0
-        bot.send_message(user_id, welcome_mes, parse_mode="html")
+        if message.text == '/start':
+            command_start(message, user_id)
+        elif message.text == '/admin' and user_id in key.admin_id:
+            command_admin(message, user_id)
 
-        # Добавление пользователя
-        add_or_update_user(user_id, first_name, last_name, phone_number, False, False)
-        # Проверка подписки
-        time.sleep(10)
-        user_is_subscribed = check_subscription(user_id)
-        if user_is_subscribed == False:
-            bot.send_message(user_id, 'Твой ход. <b>Действуй!</b> 💪', parse_mode='html')
-        # Если пользователь не подписан, то ждём подписки
-        while not user_is_subscribed:
-            user_is_subscribed = check_subscription(user_id)
-            time.sleep(5)
-
-        # Если пользователь подписан
-        buy_button = types.InlineKeyboardMarkup(row_width=1)
-        buy_button.add(
-            types.InlineKeyboardButton(text='💎 Купить доступ', url=buy_url(user_id))
-        )
-        bot.send_message(user_id, bonus_mes, parse_mode='html', reply_markup=buy_button)
-
+    @bot.callback_query_handler(func=lambda call: True)
+    def callback_inline(call):
+        if call.data == 'user_buy_sub':
+            buy_sub(call.message)
+        if call.data == 'admin_view_user':
+            pass
+        if call.data == 'admin_add_user':
+            admin_add_user(call.message)
 
     bot.polling(none_stop=True)
-
 start_bot()
